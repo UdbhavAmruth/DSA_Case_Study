@@ -1,0 +1,359 @@
+
+============================================================================
+  0. NETWORK  (Temporal Multigraph)
+============================================================================
+   19 locations, 35 roads (bidirectional)
+   parallel roads: Yeshwanthpur-Peenya x2, Hebbal-MG Road x2, MG Road-Indiranagar x2,
+                   KR Puram-Whitefield x2, Silk Board-Electronic City x2
+   Inverted index: 6 product keys, 32 buckets (load 0.19)
+     'laptop' -> WH-Peenya WH-Whitefield
+     'fridge' -> WH-Peenya WH-ElectronicCity
+     'tablet' -> WH-Whitefield WH-ElectronicCity
+
+============================================================================
+  1. DYNAMIC ROUTE OPTIMISATION  (time-dependent Dijkstra & A*)
+============================================================================
+   Same trip Electronic City -> Hebbal at three different times of day.
+   Each parallel road has its own rush-hour profile, so the best ROAD changes:
+
+   Departing 08:30 (Dijkstra / Fibonacci heap):
+      Electronic City -[Hosur Rd (S)]-> Silk Board -[BTM Ring Rd]-> BTM Layout -[Koramangala 1st Block Rd]-> Koramangala -[Hosur Rd (N)]-> MG Road -[Hebbal Flyover Expwy]-> Hebbal
+      depart 08:30  arrive 09:39  (68.6 min, 15 nodes settled)
+
+   Departing 14:00 (Dijkstra / Fibonacci heap):
+      Electronic City -[E-City Elevated Expwy]-> Silk Board -[BTM Ring Rd]-> BTM Layout -[Koramangala 1st Block Rd]-> Koramangala -[Hosur Rd (N)]-> MG Road -[Hebbal Flyover Expwy]-> Hebbal
+      depart 14:00  arrive 14:33  (33.0 min, 15 nodes settled)
+
+   Departing 23:00 (Dijkstra / Fibonacci heap):
+      Electronic City -[E-City Elevated Expwy]-> Silk Board -[BTM Ring Rd]-> BTM Layout -[Koramangala 1st Block Rd]-> Koramangala -[Hosur Rd (N)]-> MG Road -[Hebbal Flyover Expwy]-> Hebbal
+      depart 23:00  arrive 23:28  (27.7 min, 15 nodes settled)
+
+   Electronic City -> Yelahanka @14:00
+     Dijkstra : 44.7 min, 19 nodes settled
+     A*       : 44.7 min, 17 nodes settled  (same answer, smaller search)
+
+============================================================================
+  2. PRIORITY-BASED DELIVERY  (Fibonacci heap)   clock 08:30
+============================================================================
+   12 orders inserted into the Fibonacci heap (O(1) each)
+   Customer cancels order #7 (Malleshwaram) -> heap.remove(handle): removed
+   Escalation pass (decrease_key for orders near deadline):
+   ^ escalate order #6 (Koramangala) P5 -> P1 : deadline 09:50 is within 90 min
+   Queue now holds 11 orders; head = order #6
+
+============================================================================
+  3/4/7. WAREHOUSE SELECTION + VEHICLE ASSIGNMENT + CAPACITY CHECKS
+============================================================================
+
+>> Order #6  Koramangala   P1  deadline 09:50  0.3 kg  [1x headphones]
+   warehouses stocking {headphones}: 2 candidate(s)
+     - WH-Whitefield       43.4 min to customer, workload 0 -> score 43.4
+     - WH-ElectronicCity   38.8 min to customer, workload 0 -> score 38.8
+   => warehouse: WH-ElectronicCity
+   available vehicles: 6
+     - Van-01     51.8 min to pickup, 0 queued, est. delivery 10:06 (LATE) -> score 51.8
+     - Van-02     38.9 min to pickup, 0 queued, est. delivery 09:53 (LATE) -> score 38.9
+     - Truck-01   76.9 min to pickup, 0 queued, est. delivery 10:31 (LATE) -> score 76.9
+     - Bike-01    54.5 min to pickup, 0 queued, est. delivery 10:08 (LATE) -> score 54.5
+     - Van-03     70.8 min to pickup, 0 queued, est. delivery 10:25 (LATE) -> score 70.8
+     - Truck-02   22.4 min to pickup, 0 queued, est. delivery 09:36 (on time) -> score 22.4
+   => vehicle: Truck-02 (load now 0.3 / 600 kg)
+
+>> Order #2  HSR Layout    P1  deadline 10:30  15.6 kg  [1x tv, 2x headphones]
+   warehouses stocking {tv, headphones}: 1 candidate(s)
+     - WH-ElectronicCity   29.0 min to customer, workload 1 -> score 33.0
+   => warehouse: WH-ElectronicCity
+   available vehicles: 6
+     - Van-01     51.8 min to pickup, 0 queued, est. delivery 09:56 (on time) -> score 51.8
+     - Van-02     38.9 min to pickup, 0 queued, est. delivery 09:43 (on time) -> score 38.9
+     - Truck-01   76.9 min to pickup, 0 queued, est. delivery 10:21 (on time) -> score 76.9
+     - Bike-01   load 0.0 + 15.6 kg > capacity 15 kg  (skipped)
+     - Van-03     70.8 min to pickup, 0 queued, est. delivery 10:15 (on time) -> score 70.8
+     - Truck-02   22.4 min to pickup, 1 queued, est. delivery 09:31 (on time) -> score 30.4
+   => vehicle: Truck-02 (load now 15.9 / 600 kg)
+
+>> Order #0  Indiranagar   P2  deadline 11:00  6.5 kg  [2x laptop, 1x phone]
+   warehouses stocking {laptop, phone}: 2 candidate(s)
+     - WH-Peenya           44.6 min to customer, workload 0 -> score 44.6
+     - WH-Whitefield       35.4 min to customer, workload 0 -> score 35.4
+   => warehouse: WH-Whitefield
+   available vehicles: 6
+     - Van-01     52.5 min to pickup, 0 queued, est. delivery 10:03 (on time) -> score 52.5
+     - Van-02     43.0 min to pickup, 0 queued, est. delivery 09:53 (on time) -> score 43.0
+     - Truck-01   71.6 min to pickup, 0 queued, est. delivery 10:22 (on time) -> score 71.6
+     - Bike-01    35.4 min to pickup, 0 queued, est. delivery 09:46 (on time) -> score 35.4
+     - Van-03      0.0 min to pickup, 0 queued, est. delivery 09:10 (on time) -> score 0.0
+     - Truck-02   49.1 min to pickup, 2 queued, est. delivery 10:09 (on time) -> score 65.1
+   => vehicle: Van-03 (load now 6.5 / 150 kg)
+
+>> Order #9  Marathahalli  P2  deadline 11:30  2.5 kg  [3x phone, 1x tablet]
+   warehouses stocking {phone, tablet}: 2 candidate(s)
+     - WH-Whitefield       20.1 min to customer, workload 1 -> score 24.1
+     - WH-ElectronicCity   51.0 min to customer, workload 2 -> score 59.0
+   => warehouse: WH-Whitefield
+   available vehicles: 6
+     - Van-01     52.5 min to pickup, 0 queued, est. delivery 09:48 (on time) -> score 52.5
+     - Van-02     43.0 min to pickup, 0 queued, est. delivery 09:38 (on time) -> score 43.0
+     - Truck-01   71.6 min to pickup, 0 queued, est. delivery 10:07 (on time) -> score 71.6
+     - Bike-01    35.4 min to pickup, 0 queued, est. delivery 09:30 (on time) -> score 35.4
+     - Van-03      0.0 min to pickup, 1 queued, est. delivery 09:00 (on time) -> score 8.0
+     - Truck-02   49.1 min to pickup, 2 queued, est. delivery 09:54 (on time) -> score 65.1
+   => vehicle: Van-03 (load now 9.0 / 150 kg)
+
+>> Order #5  Banashankari  P2  deadline 13:00  120.0 kg  [2x fridge]
+   warehouses stocking {fridge}: 2 candidate(s)
+     - WH-Peenya           51.8 min to customer, workload 0 -> score 51.8
+     - WH-ElectronicCity   40.0 min to customer, workload 2 -> score 48.0
+   => warehouse: WH-ElectronicCity
+   available vehicles: 6
+     - Van-01     51.8 min to pickup, 0 queued, est. delivery 10:07 (on time) -> score 51.8
+     - Van-02     38.9 min to pickup, 0 queued, est. delivery 09:54 (on time) -> score 38.9
+     - Truck-01   76.9 min to pickup, 0 queued, est. delivery 10:32 (on time) -> score 76.9
+     - Bike-01   load 0.0 + 120.0 kg > capacity 15 kg  (skipped)
+     - Van-03     70.8 min to pickup, 2 queued, est. delivery 10:36 (on time) -> score 86.8
+     - Truck-02   22.4 min to pickup, 2 queued, est. delivery 09:47 (on time) -> score 38.4
+   => vehicle: Truck-02 (load now 135.9 / 600 kg)
+
+>> Order #4  KR Puram      P3  deadline 12:00  2.0 kg  [2x tablet]
+   warehouses stocking {tablet}: 2 candidate(s)
+     - WH-Whitefield       18.9 min to customer, workload 2 -> score 26.9
+     - WH-ElectronicCity   64.2 min to customer, workload 3 -> score 76.2
+   => warehouse: WH-Whitefield
+   available vehicles: 6
+     - Van-01     52.5 min to pickup, 0 queued, est. delivery 09:46 (on time) -> score 52.5
+     - Van-02     43.0 min to pickup, 0 queued, est. delivery 09:37 (on time) -> score 43.0
+     - Truck-01   71.6 min to pickup, 0 queued, est. delivery 10:06 (on time) -> score 71.6
+     - Bike-01    35.4 min to pickup, 0 queued, est. delivery 09:29 (on time) -> score 35.4
+     - Van-03      0.0 min to pickup, 2 queued, est. delivery 09:04 (on time) -> score 16.0
+     - Truck-02   49.1 min to pickup, 3 queued, est. delivery 09:58 (on time) -> score 73.1
+   => vehicle: Van-03 (load now 11.0 / 150 kg)
+
+>> Order #8  Rajajinagar   P3  deadline 13:00  33.0 kg  [2x tv, 1x laptop]
+   warehouses stocking {tv, laptop}: 1 candidate(s)
+     - WH-Peenya           17.3 min to customer, workload 0 -> score 17.3
+   => warehouse: WH-Peenya
+   available vehicles: 6
+     - Van-01     27.4 min to pickup, 0 queued, est. delivery 09:20 (on time) -> score 27.4
+     - Van-02     48.4 min to pickup, 0 queued, est. delivery 09:41 (on time) -> score 48.4
+     - Truck-01    0.0 min to pickup, 0 queued, est. delivery 08:52 (on time) -> score 0.0
+     - Bike-01   load 0.0 + 33.0 kg > capacity 15 kg  (skipped)
+     - Van-03     71.4 min to pickup, 3 queued, est. delivery 10:19 (on time) -> score 95.4
+     - Truck-02   56.3 min to pickup, 3 queued, est. delivery 10:04 (on time) -> score 80.3
+   => vehicle: Truck-01 (load now 33.0 / 600 kg)
+
+>> Order #1  Yelahanka     P3  deadline 14:00  60.0 kg  [1x fridge]
+   warehouses stocking {fridge}: 2 candidate(s)
+     - WH-Peenya           44.7 min to customer, workload 1 -> score 48.7
+     - WH-ElectronicCity   84.5 min to customer, workload 3 -> score 96.5
+   => warehouse: WH-Peenya
+   available vehicles: 6
+     - Van-01     27.4 min to pickup, 0 queued, est. delivery 09:47 (on time) -> score 27.4
+     - Van-02     48.4 min to pickup, 0 queued, est. delivery 10:08 (on time) -> score 48.4
+     - Truck-01    0.0 min to pickup, 1 queued, est. delivery 09:25 (on time) -> score 8.0
+     - Bike-01   load 0.0 + 60.0 kg > capacity 15 kg  (skipped)
+     - Van-03     71.4 min to pickup, 3 queued, est. delivery 10:46 (on time) -> score 95.4
+     - Truck-02   56.3 min to pickup, 3 queued, est. delivery 10:31 (on time) -> score 80.3
+   => vehicle: Truck-01 (load now 93.0 / 600 kg)
+
+>> Order #10 MG Road       P3  deadline 15:00  45.0 kg  [3x tv]
+   warehouses stocking {tv}: 2 candidate(s)
+     - WH-Peenya           36.0 min to customer, workload 2 -> score 44.0
+     - WH-ElectronicCity  insufficient quantity
+     ! WH-Peenya is now out of 'tv' -> removed from product index
+   => warehouse: WH-Peenya
+   available vehicles: 6
+     - Van-01     27.4 min to pickup, 0 queued, est. delivery 09:38 (on time) -> score 27.4
+     - Van-02     48.4 min to pickup, 0 queued, est. delivery 09:59 (on time) -> score 48.4
+     - Truck-01    0.0 min to pickup, 2 queued, est. delivery 09:21 (on time) -> score 16.0
+     - Bike-01   load 0.0 + 45.0 kg > capacity 15 kg  (skipped)
+     - Van-03     71.4 min to pickup, 3 queued, est. delivery 10:37 (on time) -> score 95.4
+     - Truck-02   56.3 min to pickup, 3 queued, est. delivery 10:22 (on time) -> score 80.3
+   => vehicle: Truck-01 (load now 138.0 / 600 kg)
+
+>> Order #11 BTM Layout    P4  deadline 15:00  1.5 kg  [1x tablet, 1x phone]
+   warehouses stocking {tablet, phone}: 2 candidate(s)
+     - WH-Whitefield       52.3 min to customer, workload 3 -> score 64.3
+     - WH-ElectronicCity   29.7 min to customer, workload 3 -> score 41.7
+   => warehouse: WH-ElectronicCity
+   available vehicles: 6
+     - Van-01     51.8 min to pickup, 0 queued, est. delivery 09:57 (on time) -> score 51.8
+     - Van-02     38.9 min to pickup, 0 queued, est. delivery 09:44 (on time) -> score 38.9
+     - Truck-01   76.9 min to pickup, 3 queued, est. delivery 10:37 (on time) -> score 100.9
+     - Bike-01    54.5 min to pickup, 0 queued, est. delivery 09:59 (on time) -> score 54.5
+     - Van-03     70.8 min to pickup, 3 queued, est. delivery 10:30 (on time) -> score 94.8
+     - Truck-02   22.4 min to pickup, 3 queued, est. delivery 09:42 (on time) -> score 46.4
+   => vehicle: Van-02 (load now 1.5 / 150 kg)
+
+>> Order #3  Jayanagar     P4  deadline 16:00  1.0 kg  [2x phone]
+   warehouses stocking {phone}: 3 candidate(s)
+     - WH-Peenya           41.8 min to customer, workload 3 -> score 53.8
+     - WH-Whitefield       59.2 min to customer, workload 3 -> score 71.2
+     - WH-ElectronicCity   36.9 min to customer, workload 4 -> score 52.9
+   => warehouse: WH-ElectronicCity
+   available vehicles: 6
+     - Van-01     51.8 min to pickup, 0 queued, est. delivery 10:04 (on time) -> score 51.8
+     - Van-02     38.9 min to pickup, 1 queued, est. delivery 09:56 (on time) -> score 46.9
+     - Truck-01   76.9 min to pickup, 3 queued, est. delivery 10:44 (on time) -> score 100.9
+     - Bike-01    54.5 min to pickup, 0 queued, est. delivery 10:06 (on time) -> score 54.5
+     - Van-03     70.8 min to pickup, 3 queued, est. delivery 10:38 (on time) -> score 94.8
+     - Truck-02   22.4 min to pickup, 3 queued, est. delivery 09:49 (on time) -> score 46.4
+   => vehicle: Truck-02 (load now 136.9 / 600 kg)
+
+============================================================================
+  8. MULTI-STOP DELIVERY OPTIMISATION  (NN + 2-opt, deadline aware)
+============================================================================
+
+   Van-02 plan (2 stops, start 08:30 from Koramangala):
+     09:09  PICKUP Electronic City  orders #11
+     09:42  DROP   BTM Layout       orders #11
+     roads: Koramangala 1st Block Rd > BTM Ring Rd > Hosur Rd (S) > BTM Ring Rd
+
+   Truck-01 plan (4 stops, start 08:30 from Peenya):
+     08:30  PICKUP Peenya           orders #8 #1 #10
+     08:52  DROP   Rajajinagar      orders #8
+     09:16  DROP   MG Road          orders #10
+     09:55  DROP   Yelahanka        orders #1
+     roads: Peenya Industrial Rd > Chord Rd > KG Rd > Hebbal Flyover Expwy > Airport Rd
+
+   Van-03 plan (4 stops, start 08:30 from Whitefield):
+     08:30  PICKUP Whitefield       orders #0 #9 #4
+     08:55  DROP   Marathahalli     orders #9
+     09:15  DROP   KR Puram         orders #4
+     09:34  DROP   Indiranagar      orders #0
+     roads: Varthur Rd > ORR East > Old Madras Rd (E)
+
+   Truck-02 plan (5 stops, start 08:30 from Silk Board):
+     08:52  PICKUP Electronic City  orders #6 #2 #5 #3
+     09:26  DROP   HSR Layout       orders #2
+     09:42  DROP   Koramangala      orders #6
+     10:02  DROP   Jayanagar        orders #3
+     10:15  DROP   Banashankari     orders #5
+     roads: Hosur Rd (S) > HSR 27th Main > Sarjapur Rd > Koramangala 1st Block Rd > Jayanagar 9th Block Rd > Kanakapura Rd
+
+   Vehicle   Type   Status     Location           Load(kg)   Orders
+   Van-01    van    AVAILABLE  Majestic           0.0/150         0
+   Van-02    van    EN_ROUTE   Koramangala        1.5/150         1
+   Truck-01  truck  EN_ROUTE   Peenya           138.0/600         3
+   Bike-01   bike   AVAILABLE  Indiranagar        0.0/15          0
+   Van-03    van    EN_ROUTE   Whitefield        11.0/150         3
+   Truck-02  truck  EN_ROUTE   Silk Board       136.9/600         4
+
+============================================================================
+  5. DYNAMIC RE-ROUTING   clock 09:00
+============================================================================
+   Road CLOSED: Hosur Rd (S) (Silk Board <-> Electronic City, Local) from 09:00 to 12:00
+   >> Van-02 re-routed (road closure) at 09:00 - plan changes from Electronic City (09:09)
+      before: Hosur Rd (S) > BTM Ring Rd   finish 09:42
+      after : E-City Elevated Expwy > BTM Ring Rd   finish 09:44
+
+   TRAFFIC x3.5 on KG Rd (Majestic <-> MG Road)
+   >> Truck-01 re-routed (heavy traffic) at 09:00 - plan changes from Majestic (09:07)
+      before: KG Rd > Hebbal Flyover Expwy > Airport Rd   finish 09:55
+      after : KG Rd > Hebbal Flyover Expwy > Airport Rd   finish 10:11  (same roads are still fastest - ETA updated)
+
+============================================================================
+  6. VEHICLE FAILURE RECOVERY   clock 09:40
+============================================================================
+   !! Truck-02 BROKE DOWN at HSR Layout (09:40) with 3 undelivered order(s)
+      order #6 (Koramangala): goods on board -> rescue pickup at HSR Layout
+      order #5 (Banashankari): goods on board -> rescue pickup at HSR Layout
+      order #3 (Jayanagar): goods on board -> rescue pickup at HSR Layout
+      Fibonacci-heap MERGE: main queue 0 -> 3 orders (O(1))
+
+   Re-dispatching recovered orders:
+
+>> Order #6  Koramangala   P1  deadline 09:50  0.3 kg  [1x headphones]
+   goods are on a broken vehicle at HSR Layout -> pick up there
+   available vehicles: 3
+     - Van-01     30.2 min to pickup, 0 queued, est. delivery 10:26 (LATE) -> score 30.2
+     - Bike-01    25.7 min to pickup, 0 queued, est. delivery 10:22 (LATE) -> score 25.7
+     - Van-03     25.7 min to pickup, 0 queued, est. delivery 10:22 (LATE) -> score 25.7
+   => vehicle: Bike-01 (load now 0.3 / 15 kg)
+
+>> Order #5  Banashankari  P1  deadline 13:00  120.0 kg  [2x fridge]
+   goods are on a broken vehicle at HSR Layout -> pick up there
+   available vehicles: 3
+     - Van-01     30.2 min to pickup, 0 queued, est. delivery 10:35 (on time) -> score 30.2
+     - Bike-01   load 0.3 + 120.0 kg > capacity 15 kg  (skipped)
+     - Van-03     25.7 min to pickup, 0 queued, est. delivery 10:31 (on time) -> score 25.7
+   => vehicle: Van-03 (load now 120.0 / 150 kg)
+
+>> Order #3  Jayanagar     P3  deadline 16:00  1.0 kg  [2x phone]
+   goods are on a broken vehicle at HSR Layout -> pick up there
+   available vehicles: 3
+     - Van-01     30.2 min to pickup, 0 queued, est. delivery 10:34 (on time) -> score 30.2
+     - Bike-01    25.7 min to pickup, 1 queued, est. delivery 10:34 (on time) -> score 33.7
+     - Van-03     25.7 min to pickup, 1 queued, est. delivery 10:34 (on time) -> score 33.7
+   => vehicle: Van-01 (load now 1.0 / 150 kg)
+
+   Van-01 plan (2 stops, start 09:40 from Majestic):
+     10:10  PICKUP HSR Layout       orders #3
+     10:33  DROP   Jayanagar        orders #3
+     roads: Lalbagh Rd > Jayanagar 9th Block Rd > BTM Ring Rd > HSR 27th Main > BTM Ring Rd > Jayanagar 9th Block Rd
+
+   Bike-01 plan (2 stops, start 09:40 from Indiranagar):
+     10:06  PICKUP HSR Layout       orders #6
+     10:21  DROP   Koramangala      orders #6
+     roads: Intermediate Ring Rd > Sarjapur Rd
+
+   Van-03 plan (2 stops, start 09:40 from Indiranagar):
+     10:06  PICKUP HSR Layout       orders #5
+     10:29  DROP   Banashankari     orders #5
+     roads: Intermediate Ring Rd > Sarjapur Rd > HSR 27th Main > Banashankari Ring Rd
+
+   Vehicle   Type   Status     Location           Load(kg)   Orders
+   Van-01    van    EN_ROUTE   Majestic           1.0/150         1
+   Van-02    van    EN_ROUTE   Silk Board         1.5/150         1
+   Truck-01  truck  EN_ROUTE   MG Road           60.0/600         1
+   Bike-01   bike   EN_ROUTE   Indiranagar        0.3/15          1
+   Van-03    van    EN_ROUTE   Indiranagar      120.0/150         1
+   Truck-02  truck  BROKEN     HSR Layout         0.0/600         0
+
+   vehicle_index lookups:  status:AVAILABLE=0  status:EN_ROUTE=5  status:BROKEN=1  type:van=3
+
+============================================================================
+  9. LOGISTICS NETWORK ANALYSIS  (BFS, DFS, Tarjan, alternate paths)
+============================================================================
+   BFS from Peenya @13:00: 19/19 locations reachable, farthest is 6 hops away
+   DFS connected components @13:00: 1
+   Bottleneck roads (bridges): [Airport Rd]
+   Critical junctions (articulation points): [Hebbal] [Silk Board]
+   Note: Silk Board-Electronic City has 2 parallel roads, so neither is a bridge -
+         only a MULTIgraph can see that redundancy. Silk Board itself is still a
+         critical junction.
+
+   What-if: both Silk Board-E-City roads closed 15:00-16:00
+     components @15:30 = 2 (E-City isolated), components @16:30 = 1 (road reopened - temporal edges)
+
+   Alternate routes Peenya -> HSR Layout @14:00:
+    #1
+      Peenya -[Peenya Elevated Expwy]-> Yeshwanthpur -[Outer Ring Rd (N)]-> Hebbal -[Hebbal Flyover Expwy]-> MG Road -[Hosur Rd (N)]-> Koramangala -[Sarjapur Rd]-> HSR Layout
+      depart 14:00  arrive 14:35  (35.0 min, 18 nodes settled)
+    #2
+      Peenya -[Peenya Elevated Expwy]-> Yeshwanthpur -[Outer Ring Rd (N)]-> Hebbal -[ORR North Expwy]-> KR Puram -[ORR East]-> Marathahalli -[ORR South Expwy]-> HSR Layout
+      depart 14:00  arrive 14:36  (35.6 min, 18 nodes settled)
+    #3
+      Peenya -[Tumkur Rd]-> Yeshwanthpur -[Outer Ring Rd (N)]-> Hebbal -[Hebbal Flyover Expwy]-> MG Road -[Hosur Rd (N)]-> Koramangala -[Sarjapur Rd]-> HSR Layout
+      depart 14:00  arrive 14:38  (37.7 min, 18 nodes settled)
+
+============================================================================
+  END OF DAY   clock 20:00
+============================================================================
+   #   Customer      P   Deadline  Status     Vehicle   ETA      Done     On time?
+   0   Indiranagar   2   11:00     DELIVERED  Van-03    09:34    09:34    yes
+   1   Yelahanka     3   14:00     DELIVERED  Truck-01  10:11    10:11    yes
+   2   HSR Layout    1   10:30     DELIVERED  Truck-02  09:26    09:26    yes
+   3   Jayanagar     3   16:00     DELIVERED  Van-01    10:33    10:33    yes
+   4   KR Puram      3   12:00     DELIVERED  Van-03    09:15    09:15    yes
+   5   Banashankari  1   13:00     DELIVERED  Van-03    10:29    10:29    yes
+   6   Koramangala   1   09:50     DELIVERED  Bike-01   10:21    10:21    LATE
+   7   Malleshwaram  4   17:00     CANCELLED  -         --:--    --:--    -
+   8   Rajajinagar   3   13:00     DELIVERED  Truck-01  08:52    08:52    yes
+   9   Marathahalli  2   11:30     DELIVERED  Van-03    08:55    08:55    yes
+   10  MG Road       3   15:00     DELIVERED  Truck-01  09:37    09:37    yes
+   11  BTM Layout    4   15:00     DELIVERED  Van-02    09:44    09:44    yes
+
+   Delivered 11 orders, 10 on time; fleet drove 156.8 km
+   order_index: DELIVERED=11 CANCELLED=1 BACKORDER=0
+
+   (Run  python benchmark.py  for feature 10 - performance analysis.)
